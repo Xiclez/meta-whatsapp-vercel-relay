@@ -1,0 +1,13 @@
+{
+  "name": "meta-whatsapp-vercel-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "npx vercel dev",
+    "deploy": "npx vercel --prod"
+  }
+}
