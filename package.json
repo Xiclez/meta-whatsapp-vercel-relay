@@ -9,5 +9,8 @@
   "scripts": {
     "dev": "npx vercel dev",
     "deploy": "npx vercel --prod"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
   }
 }

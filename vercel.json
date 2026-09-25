@@ -12,6 +12,10 @@
     {
       "source": "/webhook/meta",
       "destination": "/api/meta-webhook"
+    },
+    {
+      "source": "/webhook/stripe",
+      "destination": "/api/stripe-webhook"
     }
   ]
 }
