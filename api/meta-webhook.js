@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { waitUntil } from "@vercel/functions";
 
 /**
  * Meta WhatsApp Cloud API webhook relay.
@@ -136,6 +137,34 @@ async function handleMetaWebhook(request) {
     return new Response("EVENT_RECEIVED", {
       status: 200,
       headers: {
+        "Cache-Control": "no-store"
+      }
+    });
+  }
+
+  /**
+   * Avisos de estado (sent / delivered / read / failed) de mensajes salientes.
+   * Son informativos: respondemos 200 a Meta de inmediato y reenviamos a Apps
+   * Script en segundo plano con reintentos. Asi un timeout o 404 pasajero de
+   * Google no provoca 500 ni la cascada de reintentos de Meta.
+   * Los mensajes ENTRANTES siguen el flujo normal de abajo (500 => Meta reintenta).
+   */
+  if (isStatusOnly(metaPayload)) {
+    waitUntil(
+      forwardWithRetry(metaPayload).then(
+        () => console.log("✅ Estado de Meta reenviado a Apps Script."),
+        (error) =>
+          console.error(
+            "⚠️ Estado de Meta no reenviado tras reintentos (informativo):",
+            String(error?.message || error).slice(0, 200)
+          )
+      )
+    );
+
+    return new Response("EVENT_RECEIVED", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store"
       }
     });
@@ -306,4 +335,43 @@ function getTimeoutMs() {
     Math.max(configured, 1000),
     20000
   );
+}
+
+
+// ============================================================================
+// 5. AYUDAS: ESTADOS SOLAMENTE + REINTENTOS
+// ============================================================================
+
+function isStatusOnly(payload) {
+  let hasStatus = false;
+
+  for (const entry of payload?.entry || []) {
+    for (const change of entry.changes || []) {
+      const value = change.value || {};
+
+      if ((value.messages || []).length > 0) return false;
+      if ((value.statuses || []).length > 0) hasStatus = true;
+    }
+  }
+
+  return hasStatus;
+}
+
+
+async function forwardWithRetry(payload, attempts = 3) {
+  let lastError;
+
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await forwardToAppsScript(payload);
+    } catch (error) {
+      lastError = error;
+
+      if (i < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, i * 1000));
+      }
+    }
+  }
+
+  throw lastError;
 }

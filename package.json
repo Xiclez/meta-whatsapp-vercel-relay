@@ -11,6 +11,7 @@
     "deploy": "npx vercel --prod"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.0"
+    "@neondatabase/serverless": "^1.0.0",
+    "@vercel/functions": "^2.0.0"
   }
 }
