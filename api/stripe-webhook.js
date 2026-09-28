@@ -136,8 +136,15 @@ function verifyStripeSignature(rawBody, header, secret, toleranceSec = 300) {
 
 // Stripe entrega E.164 (+52614...). WhatsApp quiere solo digitos.
 // Si algun numero de MX falla con 52 + 10 digitos, prueba con 521 + 10 digitos.
+// Mexico: acepta 10 digitos, 52+10 o 521+10 y lo deja con el prefijo de WA_MX_PREFIX
+// ('521' por defecto; cambia a '52' en Vercel si Meta lo prefiere asi, sin tocar codigo).
+// Numeros de otros paises se dejan solo como digitos.
 function normalizePhone(phone) {
-  return String(phone || '').replace(/\D/g, '');
+  const d = String(phone || '').replace(/\D/g, '');
+  const prefix = process.env.WA_MX_PREFIX || '521';
+  if (d.length === 10) return prefix + d;
+  if (d.startsWith('52') && (d.length === 12 || d.length === 13)) return prefix + d.slice(-10);
+  return d;
 }
 
 async function sendTemplate(to, name, params) {
@@ -186,6 +193,11 @@ async function getPurchaseKind(sessionId) {
   const products = data.map((li) =>
     typeof li.price?.product === 'string' ? li.price.product : li.price?.product?.id
   );
+
+  console.log('Productos en la compra:', products, '| configurados:', {
+    recurring: PRODUCTS_RECURRING,
+    onetime: PRODUCTS_ONETIME,
+  });
 
   if (products.some((p) => PRODUCTS_RECURRING.includes(p))) return 'recurring';
   if (products.some((p) => PRODUCTS_ONETIME.includes(p))) return 'onetime';
