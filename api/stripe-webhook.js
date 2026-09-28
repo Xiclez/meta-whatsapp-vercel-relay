@@ -165,7 +165,9 @@ async function sendTemplate(to, name, params) {
     }),
     signal: AbortSignal.timeout(8000),
   });
-  if (!res.ok) throw new Error(`WhatsApp ${res.status}: ${await res.text()}`);
+  const text = await res.text();
+  if (!res.ok) throw new Error(`WhatsApp ${res.status} (plantilla ${name}, idioma ${WA_LANG}): ${text}`);
+  console.log('WhatsApp OK', { template: name, to, response: text });
 }
 
 // El evento del webhook NO trae el producto: hay que pedir los line items a Stripe.
@@ -199,10 +201,17 @@ const json = (body, status = 200) =>
 /* --------------------- 1) pago exitoso (ambos) ---------------------- */
 
 async function handleCheckoutPaid(session) {
-  if (session.payment_status !== 'paid') return; // OXXO/transferencia: espera async_payment_succeeded
+  if (session.payment_status !== 'paid') {
+    console.log('Ignorado: payment_status =', session.payment_status, session.id);
+    return; // OXXO/transferencia: espera async_payment_succeeded
+  }
 
   const kind = await getPurchaseKind(session.id);
-  if (!kind) return; // otro producto: ignorar
+  if (!kind) {
+    console.log('Ignorado: el producto no coincide con STRIPE_PRODUCT_RECURRING/ONETIME', session.id);
+    return; // otro producto: ignorar
+  }
+  console.log('Pago detectado', { session: session.id, kind });
 
   const email = session.customer_details?.email || null;
   const phone = normalizePhone(session.customer_details?.phone);
@@ -240,11 +249,15 @@ async function handleCheckoutPaid(session) {
 
 async function handlePaymentFailed(invoice) {
   const rec = await getMember(invoice.customer);
-  if (!rec || rec.kind !== 'recurring') return; // no es un socio recurrente nuestro
+  if (!rec || rec.kind !== 'recurring') {
+    console.log('Cobro fallido ignorado: cliente sin registro recurrente', invoice.customer);
+    return; // no es un socio recurrente nuestro
+  }
 
   await sendTemplate(normalizePhone(process.env.ADMIN_WHATSAPP), TPL_ADMIN, [
     rec.username,
     rec.phone ? `+${rec.phone}` : rec.email || 'sin dato',
+    invoice.attempt_count ?? '?', // {{3}} = numero de intento
   ]);
 }
 
