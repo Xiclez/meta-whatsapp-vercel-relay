@@ -16,6 +16,10 @@
     {
       "source": "/webhook/stripe",
       "destination": "/api/stripe-webhook"
+    },
+    {
+      "source": "/cron/franquicias",
+      "destination": "/api/franquicias-cron"
     }
   ]
 }

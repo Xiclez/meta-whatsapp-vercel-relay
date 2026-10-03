@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
 import { waitUntil } from "@vercel/functions";
+import {
+  handleFranquiciasPayload,
+  isFranquiciasStatusOnly
+} from "../lib/franquicias/flow.js";
 
 /**
  * Meta WhatsApp Cloud API webhook relay.
@@ -137,6 +141,28 @@ async function handleMetaWebhook(request) {
     return new Response("EVENT_RECEIVED", {
       status: 200,
       headers: {
+        "Cache-Control": "no-store"
+      }
+    });
+  }
+
+  /**
+   * FLUJO FRANQUICIAS (Click-to-WhatsApp)
+   * Corre en segundo plano y nunca lanza error, así que no afecta el relay
+   * ni la respuesta a Meta. Es idempotente por message.id (si Meta reintenta,
+   * no se duplican mensajes).
+   */
+  waitUntil(handleFranquiciasPayload(metaPayload));
+
+  /**
+   * Los estados (sent/delivered/read) de los mensajes del flujo no se
+   * reenvían a Apps Script para no gastar su cuota de ejecuciones.
+   */
+  if (isFranquiciasStatusOnly(metaPayload)) {
+    return new Response("EVENT_RECEIVED", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store"
       }
     });

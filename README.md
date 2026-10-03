@@ -17,7 +17,13 @@ No usa Express, Docker ni servidor persistente. Está adaptado a Vercel Function
 meta-whatsapp-vercel-relay/
 ├── api/
 │   ├── health.js
-│   └── meta-webhook.js
+│   ├── meta-webhook.js
+│   ├── stripe-webhook.js
+│   └── franquicias-cron.js     ← cron del flujo Franquicias
+├── lib/
+│   └── franquicias/
+│       ├── flow.js             ← lógica del flujo (Neon)
+│       └── messages.js         ← textos de los 4 mensajes
 ├── apps-script/
 │   └── doPost.gs
 ├── .env.example
@@ -316,3 +322,77 @@ META_RELAY_SECRET
 Si Apps Script no responde correctamente, el relay responde HTTP 500 a Meta para permitir reintentos.
 
 Cuando empieces a ejecutar acciones sobre mensajes entrantes, debes hacerlas idempotentes usando IDs de mensajes/eventos para que un reintento no duplique acciones.
+
+
+---
+
+# 11. Flujo Franquicias (anuncios Click-to-WhatsApp)
+
+Cuando alguien escribe desde el anuncio de Meta, el bot responde automáticamente:
+
+| # | Cuándo | Contenido |
+|---|--------|-----------|
+| 1 | Inmediato | Únete a la comunidad + enlace |
+| 2 | +6 h | Infórmate más + landing |
+| 3 | +12 h | ¿Ya te uniste? + enlace |
+| 4 | +23 h | Último mensaje + enlace |
+
+Todo va como texto libre dentro de la ventana de 24 h (no requiere plantillas).
+
+### Cómo convive con lo demás
+
+- Corre dentro de `api/meta-webhook.js` en segundo plano (`waitUntil`). **El reenvío a Apps Script sigue igual** y un error del flujo nunca afecta la respuesta a Meta.
+- Solo entra al flujo quien escribe *"escuela digital"* o *"franquicia"*, o quien llega desde un anuncio (Meta incluye `referral`). Alumnos y maestros que responden recordatorios **no** entran.
+- BAJA / STOP / ALTO / CANCELAR solo se atiende si el número es un lead del flujo.
+- Idempotente por `message.id`: si Meta reintenta (p. ej. porque Apps Script falló), no se duplican mensajes.
+- Los estados (sent/delivered/read) de los mensajes del flujo **no** se reenvían a Apps Script, para no gastar su cuota. Se identifican con `biz_opaque_callback_data = "franq_flow"`.
+- Tablas en Neon (se crean solas): `franquicia_leads`, `franquicia_inbound`.
+
+### Variables de entorno
+
+Reutiliza las que ya existen: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_GRAPH_VERSION`, `DATABASE_URL`.
+
+Nueva, **obligatoria**:
+
+```text
+CRON_SECRET          texto largo aleatorio (el mismo va en cron-job.org)
+```
+
+Opcionales (tienen valor por defecto):
+
+```text
+FRANQ_PHONE_NUMBER_ID     si el flujo corre en un número distinto a WHATSAPP_PHONE_NUMBER_ID
+FRANQ_COMMUNITY_LINK      https://chat.whatsapp.com/IUeFFiRZ8zrJWGsajKDqri
+FRANQ_LANDING_URL         https://franquicias.ulalmexico.com
+FRANQ_FOLLOWUP_HOURS      6,12,23   (el último debe ser < 24)
+FRANQ_KEYWORDS            escuela digital,franquicia
+FRANQ_REFERRAL_TRIGGERS   true      (iniciar si viene de cualquier anuncio CTWA)
+FRANQ_AD_IDS              vacío     (si lo llenas, solo esos IDs de anuncio disparan el flujo)
+FRANQ_RESTART_AFTER_DAYS  7
+FRANQ_ENABLED             true      (false = pausa todo: no entran leads nuevos ni salen seguimientos)
+```
+
+Generar `CRON_SECRET`:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
+```
+
+### Cron externo (cron-job.org)
+
+1. Crea una cuenta gratis en https://cron-job.org → **Create cronjob**.
+2. URL: `https://tu-proyecto.vercel.app/cron/franquicias`
+3. Ejecución: **cada 5 minutos**.
+4. **Advanced → Headers**: `Authorization` = `Bearer TU_CRON_SECRET`
+5. **Test run** → debe responder `{"ok":true,"revisados":0,...}`. Si da `401`, el secreto no coincide.
+6. Activa la notificación por correo cuando falle.
+
+Estadísticas:
+
+```text
+GET /cron/franquicias?stats=1     (con el mismo header)
+```
+
+### Editar los textos
+
+`lib/franquicias/messages.js`. Formato WhatsApp: `*negritas*`, `_cursivas_`.
