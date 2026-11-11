@@ -395,12 +395,24 @@ GET /cron/franquicias?stats=1     (con el mismo header)
 
 ### Respaldo con Claude (clasificador de leads)
 
-Cuando un contacto **nuevo** escribe y ni la frase ni el anuncio disparan el flujo, el mensaje se le pasa a Claude (`lib/franquicias/classifier.js`), que lo clasifica como `franquicia`, `alumno_maestro` u `otro`. Si es `franquicia` con confianza suficiente, arranca el flujo normal.
+Cuando un contacto **nuevo** escribe y ni la frase ni el anuncio disparan el flujo, el mensaje se le pasa a Claude (`lib/franquicias/classifier.js`), que decide qué hacer:
+
+| Claude concluye | Qué pasa |
+|---|---|
+| `franquicia` (con confianza) | Arranca el flujo normal: enlace de la comunidad |
+| `atencion` (quejas, solicitudes, alumnos, cursos) | Se le manda el teléfono de Recepción (`FRANQ_SUPPORT_PHONE`) |
+| `sin_respuesta` (acuses a recordatorios, spam) | Silencio |
+| `incierto` o confianza baja ("hola", "info") | Claude saluda y pregunta qué necesita. Máximo 2 preguntas; si sigue sin aclararse, se manda a Recepción |
+
+- Quien **responde/cita un recordatorio** de clase no recibe preguntas: solo se le canaliza a Recepción si pide algo de forma clara.
+- Después de mandar a alguien a Recepción no se le vuelve a escribir en 24 h (salvo que pida la franquicia).
+- La pregunta la redacta Claude; si trae enlaces, teléfonos o es muy larga se usa el texto fijo `CLARIFY_FALLBACK`. El mensaje de Recepción es fijo (`SUPPORT_REDIRECT`). Ambos están en `lib/franquicias/messages.js`.
+- La conversación de aclaración se guarda en la tabla `franquicia_triage` (se crea sola).
 
 - Las reglas fijas siguen siendo la vía rápida: si disparan, no se llama a Claude.
 - Si Claude falla, tarda más de 8 s o no hay API key, no se envía nada (igual que antes).
 - Audios, stickers e imágenes sin texto no se clasifican; solo se registran.
-- Todo mensaje que pasa por aquí queda en la tabla `franquicia_unmatched` (se crea sola, se limpia a los 60 días) con el veredicto y lo que se hizo: `started`, `skipped`, `ai_off`, `ai_error`, `no_text`.
+- Todo mensaje que pasa por aquí queda en la tabla `franquicia_unmatched` (se crea sola, se limpia a los 60 días) con el veredicto, lo que se hizo y lo que se le contestó: `started`, `asked`, `redirected`, `skipped`, `ai_off`, `ai_error`, `no_text`, `send_error`.
 
 Variables:
 
@@ -408,7 +420,9 @@ Variables:
 ANTHROPIC_API_KEY         obligatoria para activar el respaldo (https://console.anthropic.com)
 FRANQ_AI_ENABLED          true      (false = apaga solo el respaldo con Claude)
 FRANQ_AI_MODEL            claude-haiku-5-5
-FRANQ_AI_MIN_CONFIDENCE   0.7       (súbelo si le llega el enlace a alumnos; bájalo si se escapan leads)
+FRANQ_AI_MIN_CONFIDENCE   0.7       (debajo de esto Claude pregunta en vez de actuar)
+FRANQ_SUPPORT_PHONE       614 212 3175   (Recepción / atención al cliente)
+FRANQ_TRIAGE_REPLIES      true      (false = Claude solo clasifica; no pregunta ni manda a Recepción)
 ```
 
 Revisar qué se quedó fuera (para rescatar leads a mano dentro de las 24 h):
