@@ -409,6 +409,19 @@ Cuando un contacto **nuevo** escribe y ni la frase ni el anuncio disparan el flu
 - La pregunta la redacta Claude; si trae enlaces, teléfonos o es muy larga se usa el texto fijo `CLARIFY_FALLBACK`. El mensaje de Recepción es fijo (`SUPPORT_REDIRECT`). Ambos están en `lib/franquicias/messages.js`.
 - La conversación de aclaración se guarda en la tabla `franquicia_triage` (se crea sola).
 
+**Quien ya está en el flujo y vuelve a escribir** también pasa por Claude (antes se ignoraba):
+
+| Situación | Qué pasa |
+|---|---|
+| Flujo activo y pregunta o pide info de la franquicia | Se le reenvía el enlace de la comunidad y la landing (`LEAD_REPLY`), máximo una vez cada 10 min. El calendario de seguimientos no cambia |
+| Flujo terminado (completado, expirado o fallido) y muestra interés | El flujo se reinicia desde el mensaje 1 |
+| "Gracias", "ya me uní", "ok" | Silencio |
+| Asunto ajeno a franquicias | Teléfono de Recepción |
+| No queda claro | Pregunta aclaratoria |
+| Pidió BAJA | No se le vuelve a escribir |
+
+Un clic nuevo en un anuncio reinicia el flujo terminado sin consultar a Claude. Con Claude apagado se conserva la regla anterior (frase + `FRANQ_RESTART_AFTER_DAYS`).
+
 - Las reglas fijas siguen siendo la vía rápida: si disparan, no se llama a Claude.
 - Si Claude falla, tarda más de 8 s o no hay API key, no se envía nada (igual que antes).
 - Audios, stickers e imágenes sin texto no se clasifican; solo se registran.
