@@ -402,7 +402,7 @@ Cuando un contacto **nuevo** escribe y ni la frase ni el anuncio disparan el flu
 | `franquicia` (con confianza) | Arranca el flujo normal: enlace de la comunidad |
 | `atencion` (quejas, solicitudes, alumnos, cursos) | Se le manda el teléfono de Recepción (`FRANQ_SUPPORT_PHONE`) |
 | `sin_respuesta` (acuses a recordatorios, spam) | Silencio |
-| `incierto` o confianza baja ("hola", "info") | Claude saluda y pregunta qué necesita. Máximo 2 preguntas; si sigue sin aclararse, se manda a Recepción |
+| `incierto` o confianza baja ("hola", "info") | Claude saluda y pregunta qué necesita (una sola vez). Cualquier respuesta a esa pregunta ("sí", "info") cuenta como interés y arranca el flujo, salvo que diga claramente que es otro asunto |
 
 - Quien **responde/cita un recordatorio** de clase no recibe preguntas: solo se le canaliza a Recepción si pide algo de forma clara.
 - Después de mandar a alguien a Recepción no se le vuelve a escribir en 24 h (salvo que pida la franquicia).
@@ -413,11 +413,10 @@ Cuando un contacto **nuevo** escribe y ni la frase ni el anuncio disparan el flu
 
 | Situación | Qué pasa |
 |---|---|
-| Flujo activo y pregunta o pide info de la franquicia | Se le reenvía el enlace de la comunidad y la landing (`LEAD_REPLY`), máximo una vez cada 10 min. El calendario de seguimientos no cambia |
+| Flujo activo y contesta cualquier cosa dentro del contexto (responde "¿para cuándo te gustaría tener tu negocio operando?", pregunta, pide info, "sí") | Se le reenvía el enlace de la comunidad y la landing (`LEAD_REPLY`), máximo una vez cada 10 min. El calendario de seguimientos no cambia |
 | Flujo terminado (completado, expirado o fallido) y muestra interés | El flujo se reinicia desde el mensaje 1 |
-| "Gracias", "ya me uní", "ok" | Silencio |
+| "Ya me uní", "listo, gracias" | Silencio |
 | Asunto ajeno a franquicias | Teléfono de Recepción |
-| No queda claro | Pregunta aclaratoria |
 | Pidió BAJA | No se le vuelve a escribir |
 
 Un clic nuevo en un anuncio reinicia el flujo terminado sin consultar a Claude. Con Claude apagado se conserva la regla anterior (frase + `FRANQ_RESTART_AFTER_DAYS`).
