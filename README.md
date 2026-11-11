@@ -393,6 +393,32 @@ Estadísticas:
 GET /cron/franquicias?stats=1     (con el mismo header)
 ```
 
+### Respaldo con Claude (clasificador de leads)
+
+Cuando un contacto **nuevo** escribe y ni la frase ni el anuncio disparan el flujo, el mensaje se le pasa a Claude (`lib/franquicias/classifier.js`), que lo clasifica como `franquicia`, `alumno_maestro` u `otro`. Si es `franquicia` con confianza suficiente, arranca el flujo normal.
+
+- Las reglas fijas siguen siendo la vía rápida: si disparan, no se llama a Claude.
+- Si Claude falla, tarda más de 8 s o no hay API key, no se envía nada (igual que antes).
+- Audios, stickers e imágenes sin texto no se clasifican; solo se registran.
+- Todo mensaje que pasa por aquí queda en la tabla `franquicia_unmatched` (se crea sola, se limpia a los 60 días) con el veredicto y lo que se hizo: `started`, `skipped`, `ai_off`, `ai_error`, `no_text`.
+
+Variables:
+
+```text
+ANTHROPIC_API_KEY         obligatoria para activar el respaldo (https://console.anthropic.com)
+FRANQ_AI_ENABLED          true      (false = apaga solo el respaldo con Claude)
+FRANQ_AI_MODEL            claude-haiku-5-5
+FRANQ_AI_MIN_CONFIDENCE   0.7       (súbelo si le llega el enlace a alumnos; bájalo si se escapan leads)
+```
+
+Revisar qué se quedó fuera (para rescatar leads a mano dentro de las 24 h):
+
+```text
+GET /cron/franquicias?unmatched=1&limit=50     (con el mismo header)
+```
+
+`?stats=1` ahora incluye `porOrigen` (keyword / referral / ai) y `noDisparados7d`.
+
 ### Editar los textos
 
 `lib/franquicias/messages.js`. Formato WhatsApp: `*negritas*`, `_cursivas_`.

@@ -3,11 +3,13 @@
 //
 //   GET /cron/franquicias          -> envía los mensajes programados que ya tocan
 //   GET /cron/franquicias?stats=1  -> estadísticas del flujo
+//   GET /cron/franquicias?unmatched=1[&limit=50] -> mensajes que no dispararon por regla
+//                                                   fija, con el veredicto de Claude
 //
 // Autorización: header "Authorization: Bearer <CRON_SECRET>"  (o ?secret=<CRON_SECRET>)
 
 import crypto from 'node:crypto';
-import { processDueLeads, getStats } from '../lib/franquicias/flow.js';
+import { processDueLeads, getStats, getUnmatched } from '../lib/franquicias/flow.js';
 
 const json = (body, status = 200) =>
   Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -35,6 +37,9 @@ export default {
     try {
       if (url.searchParams.get('stats')) {
         return json({ ok: true, ...(await getStats()) });
+      }
+      if (url.searchParams.get('unmatched')) {
+        return json({ ok: true, mensajes: await getUnmatched(url.searchParams.get('limit')) });
       }
       const result = await processDueLeads();
       if (result.revisados) console.log('[franq] cron', result);
